@@ -26,11 +26,12 @@ git clone https://github.com/xiaoxinblast/batch-translate.git batch_translate
 pip install lxml openpyxl python-docx pdfplumber
 ```
 
-克隆后删除 `.git` 目录：
+克隆后清理 `.git` 并创建必要目录：
 
 ```bash
 # Windows: rmdir /s /q batch_translate\.git
 # macOS/Linux: rm -rf batch_translate/.git
+mkdir -p batch_translate/data batch_translate/exports
 ```
 
 ## 阶段一：项目初始化
