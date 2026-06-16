@@ -32,11 +32,15 @@ pip install lxml openpyxl python-docx pdfplumber
 # Windows: rmdir /s /q batch_translate\.git
 # macOS/Linux: rm -rf batch_translate/.git
 mkdir -p batch_translate/data batch_translate/exports
+# 目录结构（按源文件 stem 分组）：
+#   data/<stem>/_working_*, batch_state.json   ← 每个源文件独立
+#   exports/<stem>/_batch_NNN_*.json           ← 每个源文件独立
+#   data/tm_memory.json, term_base.xlsx, style_guide.txt  ← 共享
 ```
 
 ## 阶段一：项目初始化
 
-若 `batch_translate/data/batch_state.json` 不存在，则尚未初始化。**自动完成以下准备**：
+若 `batch_translate/data/<stem>/batch_state.json` 不存在，则尚未初始化。`<stem>` 为源文件名（不含扩展名）。**自动完成以下准备**：
 
 ### 1. 生成风格指南 → `batch_translate/data/style_guide.txt`
 
@@ -83,7 +87,7 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 
 **必须**用 `Agent` 工具派分析任务。prompt：
 
-> 读取 `batch_translate/exports/_working.json`，做全量语境分析。输出纯文本分析报告，必须覆盖：
+> 读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。输出纯文本分析报告，必须覆盖：
 > - **文档类型与用途**：这是什么文档，给谁看的，整体语气风格
 > - **内容分段**：文档由哪些主要部分组成，每部分对应的 id 范围
 > - **跨区域关联**：相距较远但内容关联的条目（如前面标题与后面详述），明确指出 id 对应关系
@@ -95,9 +99,9 @@ Agent 返回报告后，**必须**将内容写入 `batch_state.json` 的 `docume
 
 ```python
 import json
-state = json.load(open('batch_translate/data/batch_state.json'))
+state = json.load(open('batch_translate/data/<stem>/batch_state.json'))
 state['document_summary'] += "\n\n" + agent_report  # agent_report 是 Agent 返回的文本
-json.dump(state, open('batch_translate/data/batch_state.json', 'w'), ensure_ascii=False, indent=2)
+json.dump(state, open('batch_translate/data/<stem>/batch_state.json', 'w'), ensure_ascii=False, indent=2)
 ```
 
 ## 校对模式（已有译文）
@@ -175,6 +179,6 @@ submit 内部自动执行 write + TM 积累 + 重新 parse + 生成下一批 JSO
 ## 注意事项
 
 - 翻译和校对 Agent 各自独立上下文
-- 所有中间文件保留在 `batch_translate/exports/`
-- 源文件不受影响，init 会复制到 `batch_translate/data/_working_*`
+- 所有中间文件按源文件保留在 `batch_translate/exports/<stem>/`
+- 源文件不受影响，init 会复制到 `batch_translate/data/<stem>/_working_*`
 - 支持格式：mqxliff / docx / xlsx / xlsm / txt / csv / tsv
