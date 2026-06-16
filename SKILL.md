@@ -40,10 +40,13 @@ mkdir -p batch_translate/data batch_translate/exports
 
 ### 1. 生成风格指南 → `batch_translate/data/style_guide.txt`
 
+> ⚠️ **强制步骤**：必须在 init 之前完成，不可跳过。
+
 - 扫描项目中的翻译指南文件（如 `翻译指南/` 文件夹中的 PDF、xlsx、txt 等）
 - 用 pdfplumber 提取 PDF 文本，openpyxl 读取 xlsx
 - 编译为结构化的风格指南（不标注来源）
-- 如项目无任何翻译文档 → 生成通用模板，标注"（请按项目补充）"
+- 如项目无任何翻译文档 → 基于源文件内容分析，生成针对性的风格指南模板（术语、语气、标点约定），标注"（可按项目补充）"
+- **必须用 Write 工具将风格指南写入文件**，确认文件存在后才进入步骤 2
 
 ### 2. 生成术语库 → `batch_translate/data/term_base.xlsx`
 
@@ -76,15 +79,25 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 
 ### 5. 全量语境分析
 
-init 后，派分析 Agent（opus + max 思考强度）读取工作 JSON（`batch_translate/exports/_working.json`）做全量语境分析。输出纯文本分析报告，必须覆盖：
+> ⚠️ **强制步骤**：init 后必须立即执行，不可跳过。
 
-- **内容分类**：每个上下文分组的文本类型、用途、语气风格
-- **跨区域关联**：识别文件中相距较远但实际关联的条目（如前面是任务名/技能名，后面是详细说明），明确指出 id 范围和关联关系，提醒翻译 Agent 综合参考
-- **叙事/对话脉络**：如有故事文本或连续对话，总结剧情弧线和角色关系
-- **术语和格式模式**：高频术语、固定格式（括号/冒号/换行等）
-- **翻译注意事项**：特殊条目（空白文本、多语种混入、字数/空间约束等）
+**必须**用 `Agent` 工具派分析任务。prompt：
 
-将输出追加到 `batch_state.json` 的 `document_summary` 末尾。
+> 读取 `batch_translate/exports/_working.json`，做全量语境分析。输出纯文本分析报告，必须覆盖：
+> - **内容分类**：每个上下文分组的文本类型、用途、语气风格
+> - **跨区域关联**：识别文件中相距较远但实际关联的条目（如前面是任务名/技能名，后面是详细说明），明确指出 id 范围和关联关系，提醒翻译 Agent 综合参考
+> - **叙事/对话脉络**：如有故事文本或连续对话，总结剧情弧线和角色关系
+> - **术语和格式模式**：高频术语、固定格式（括号/冒号/换行等）
+> - **翻译注意事项**：特殊条目（空白文本、多语种混入、字数/空间约束等）
+
+Agent 返回报告后，**必须**将内容写入 `batch_state.json` 的 `document_summary` 字段。方法：
+
+```python
+import json
+state = json.load(open('batch_translate/data/batch_state.json'))
+state['document_summary'] += "\n\n" + agent_report  # agent_report 是 Agent 返回的文本
+json.dump(state, open('batch_translate/data/batch_state.json', 'w'), ensure_ascii=False, indent=2)
+```
 
 ## 校对模式（已有译文）
 
@@ -112,11 +125,12 @@ python batch_translate/batch.py next
 
 用 `Agent` 工具派翻译任务。**必须指定 `model: "opus"` 并启用 max 思考强度**。prompt：
 
-> 读取 `_batch_NNN_to_translate.json`，按其中的 instructions 和 style_guide 翻译所有 entries 的 source 字段。
+> 读取 `_batch_NNN_to_translate.json`，按其中的 instructions、style_guide 和 document_summary 翻译所有 entries 的 source 字段。
 > 遇到不确定的术语或上下文时，主动搜索项目文件或联网验证。
-> 输出 JSON 数组 `[{"id": "1", "target": "译文"}, ...]`，仅输出 JSON，不加解释。
+> 翻译完成后，用 Write 工具将结果写入 `_batch_NNN_translated.json`。
+> 格式：`[{"id": "1", "target": "译文"}, ...]`，仅输出 JSON。
 
-Agent 返回后，将结果保存为 `_batch_NNN_translated.json`。
+Agent 返回后，**必须确认**文件存在，否则重试。
 
 ### Step 3: 生成校对文件
 
@@ -133,9 +147,11 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source：
 > 1) 术语 2) 标点 3) 语气 4) 自然流畅。
 > 发现问题直接修正，不要标注。
-> 输出 JSON 数组 `[{"id": "1", "target": "修正后译文"}, ...]`，仅输出 JSON。
+> 修正完成后，用 Write 工具将完整的 JSON 数组写入 `_batch_NNN_reviewed.json`。
+> 格式：`[{"id": "1", "target": "修正后译文"}, ...]`。
+> 必须在回复中说明一共修正了几处、分别是什么问题，但修正后的完整 JSON 必须已写入文件。
 
-Agent 返回后，将结果保存为 `_batch_NNN_reviewed.json`。
+Agent 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
 
 ### Step 5: 提交并推进
 
