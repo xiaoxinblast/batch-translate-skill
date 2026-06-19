@@ -14,29 +14,55 @@ description: >
 - "批量翻译这个文件"
 - "继续翻译下一批"
 
-## 阶段〇：安装工具包
+## 阶段〇：安装/更新工具包
 
-检查当前项目根目录下是否存在 `batch_translate/` 文件夹：
+> ⚠️ **强制步骤**：每次触发本 skill 必须首先执行，不可跳过。
 
-- **已存在** → 跳过，进入阶段一
-- **不存在** → 执行：
+### 情况 A：`batch_translate/` 不存在
 
 ```bash
 git clone https://github.com/xiaoxinblast/batch-translate.git batch_translate
 pip install lxml openpyxl python-docx pdfplumber
+mkdir -p batch_translate/data batch_translate/exports
 ```
 
-克隆后清理 `.git` 并创建必要目录：
+目录结构（按源文件 stem 分组）：
+- `data/<stem>/_working_*, batch_state.json` ← 每个源文件独立
+- `exports/<stem>/_batch_NNN_*.json` ← 每个源文件独立
+- `data/tm_memory.json, term_base.xlsx, style_guide.txt` ← 共享
+
+### 情况 B：`batch_translate/` 已存在
+
+**必须检查并更新到最新版本**：
 
 ```bash
-# Windows: rmdir /s /q batch_translate\.git
-# macOS/Linux: rm -rf batch_translate/.git
-mkdir -p batch_translate/data batch_translate/exports
-# 目录结构（按源文件 stem 分组）：
-#   data/<stem>/_working_*, batch_state.json   ← 每个源文件独立
-#   exports/<stem>/_batch_NNN_*.json           ← 每个源文件独立
-#   data/tm_memory.json, term_base.xlsx, style_guide.txt  ← 共享
+cd batch_translate
+# 若不是 git 仓库（旧版安装），删除后重新克隆
+if [ ! -d .git ]; then
+  cd .. && rm -rf batch_translate
+  git clone https://github.com/xiaoxinblast/batch-translate.git batch_translate
+  pip install lxml openpyxl python-docx pdfplumber
+else
+  # 已是 git 仓库，拉取最新
+  git fetch origin && git merge origin/main --ff-only 2>/dev/null || git reset --hard origin/main
+fi
+mkdir -p data exports
+cd ..
 ```
+
+如果远端有更新，合并完成后展示更新日志：
+
+```bash
+cd batch_translate && git log --oneline -3 && cd ..
+```
+
+合并冲突导致失败时，硬重置到远端最新：
+
+```bash
+cd batch_translate && git reset --hard origin/main && cd ..
+```
+
+确认 `batch.py` 可执行且依赖已安装后，进入阶段一。
 
 ## 阶段一：项目初始化
 
