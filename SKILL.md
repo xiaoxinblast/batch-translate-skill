@@ -157,6 +157,14 @@ python batch_translate/batch.py next
 用 `Agent` 工具派翻译任务。**必须指定 `model: "opus"` 并启用 max 思考强度**。prompt：
 
 > 读取 `_batch_NNN_to_translate.json`，按其中的 instructions、style_guide 和 document_summary 翻译所有 entries 的 source 字段。
+> 
+> **利用内嵌数据**：每条 entry 可能带有：
+> - `tm_matches`：翻译记忆模糊匹配（含 similarity 分数、已有译文），高相似度（≥0.85）可直接复用或微调
+> - `terms`：术语库匹配结果，确保术语译法与术语库一致
+> - `context`：场景标识，同一角色/场景的用语应保持一致
+> 
+> **标签保护**：原文中的 `<tag id='...' type='...' desc='...'/>` 等内联标签必须原样保留在译文中，不得删除、修改或遗漏。
+> 
 > 遇到不确定的术语或上下文时，主动搜索项目文件或联网验证。
 > 翻译完成后，用 Write 工具将结果写入 `_batch_NNN_translated.json`。
 > 格式：`[{"id": "1", "target": "译文"}, ...]`，仅输出 JSON。
@@ -177,6 +185,11 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 > 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source：
 > 1) 术语 2) 标点 3) 语气 4) 自然流畅。
+> 
+> **利用内嵌数据**：每条 entry 可能带有 `tm_matches`（翻译记忆参考）和 `terms`（术语约束），核对时参考。
+> 
+> **标签保护**：内联标签（`<tag .../>`）必须原样保留，数量与位置与 source 一致。丢失标签是最严重的错误。
+> 
 > 发现问题直接修正，不要标注。
 > 修正完成后，用 Write 工具将完整的 JSON 数组写入 `_batch_NNN_reviewed.json`。
 > 格式：`[{"id": "1", "target": "修正后译文"}, ...]`。
