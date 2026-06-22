@@ -62,7 +62,40 @@ cd batch_translate && git log --oneline -3 && cd ..
 cd batch_translate && git reset --hard origin/main && cd ..
 ```
 
-确认 `batch.py` 可执行且依赖已安装后，进入阶段一。
+确认 `batch.py` 可执行且依赖已安装后，进入阶段〇.五。
+
+## 阶段〇.五：项目文件扫描
+
+> ⚠️ **强制步骤**：必须在阶段一之前执行。目的是**先摸清整个项目有什么，再决定用什么**。
+
+### 1. 列出根目录
+```bash
+ls -la
+```
+
+### 2. 多维度 Glob 扫描
+
+用 Glob 工具做以下搜索（并行执行）：
+
+- 术语类：`**/*术语*` `**/*用語*` `**/*term*` `**/*glossary*` `**/*词汇*`
+- 风格指南类：`**/*翻译指南*` `**/*翻訳*` `**/*方針*` `**/*style*guide*` `**/*ローカライズ*` `**/*本地化*`
+- 翻译记忆类：`**/*tm*` `**/*memory*` `**/*翻译记忆*`
+- 前作/参考类：`**/*前作*` `**/*master*` `**/*マスター*`
+
+### 3. 评估找到的文件
+
+列出所有找到的文件，标注大小（文件大小/行数）。
+
+**优先级判断原则**（通用，不绑定具体文件名）：
+- 根目录的文件优先于子目录文件（根目录往往是汇总后的完整版）
+- 行数/大小大的优先于小的（大的往往是完整版，小的是摘录）
+- `.xlsx` 多 sheet 的优先于单 sheet
+- `.docx` 正文长的优先于短的
+- 文件修改时间新的优先于旧的
+
+### 4. 确定参考文件列表
+
+根据扫描结果和优先级原则，确定阶段一将使用的风格指南来源和术语库来源。列出来源文件路径，供后续步骤使用。
 
 ## 阶段一：项目初始化
 
@@ -72,17 +105,42 @@ cd batch_translate && git reset --hard origin/main && cd ..
 
 > ⚠️ **强制步骤**：必须在 init 之前完成，不可跳过。
 
-- 扫描项目中的翻译指南文件（如 `翻译指南/` 文件夹中的 PDF、xlsx、txt 等）
-- 用 pdfplumber 提取 PDF 文本，openpyxl 读取 xlsx
-- 编译为结构化的风格指南（不标注来源）
+根据阶段〇.五的扫描结果，选择风格指南来源文件。
+
+#### 选择原则
+- 优先选用根目录下包含「翻译指南」「方針」「本地化」「style guide」等关键词的文件
+- 若根目录无，再用子目录中的
+- 多个来源时，内容最多的作为主体，其余补充
 - 如项目无任何翻译文档 → 基于源文件内容分析，生成针对性的风格指南模板（术语、语气、标点约定），标注"（可按项目补充）"
-- **必须用 Write 工具将风格指南写入文件**，确认文件存在后才进入步骤 2
+
+#### 提取方法（避免 Shell 和编码问题）
+- 用 python heredoc：`python << 'PYEOF' ... PYEOF`
+- 输出重定向到文件后用 Read 读取，避免 GBK 终端编码错误
+- docx 用 python-docx，xlsx 用 openpyxl，pdf 用 pdfplumber
+
+#### 编译要求
+- 合并多个来源时去重、整理为统一结构
+- 不标注来源文件路径
+- **必须用 Write 工具将风格指南写入文件**
+- 确认文件存在后才进入步骤 2
 
 ### 2. 生成术语库 → `batch_translate/data/term_base.xlsx`
 
-- 扫描项目中的术语数据文件（如 `_temp/术语库_*.txt`、术语表 xlsx 等）
+根据阶段〇.五的扫描结果，选择术语来源文件。
+
+#### 选择原则
+- 优先选用根目录下包含「术语」「用語」「term」「glossary」等关键词的 xlsx 文件
+- 若根目录无，再用子目录中的（含 `old/` 旧版目录）
+- 多个来源时全部合并
+
+#### 强制规则
+- ⚠️ **读取任何参考文件时，必须读取全部行。禁止使用 `max_row` 或 `min()` 截断行数**
+- 自适应识别列结构：查找「日文/日本語/ja/JP」「中文/中国語/zh/CN/SC」列
+- 注释列如有分类信息（如角色名/地名等），保留到注释字段
+- 多来源合并时以「日文」列为 key 去重
+- 输出时报告：总条数、来源文件数、各分类（如有）的分布
 - 以 xlsx 三列格式写入：`原文(ja) | 译文(zh) | 注释`
-- 如无术语数据 → 运行 `term_base.py --create` 生成空白模板
+- 如无任何术语数据 → 运行 `term_base.py --create` 生成空白模板
 
 ### 3. 创建翻译记忆
 
@@ -197,6 +255,28 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 Agent 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
 
+### Step 4.5: 验证校对 JSON
+
+> ⚠️ 校对 Agent 返回后、提交前，**必须**验证 JSON 有效性。
+
+```bash
+python -c "
+import json
+with open('batch_translate/exports/<stem>/_batch_NNN_reviewed.json', 'r', encoding='utf-8') as f:
+    data = json.load(f)
+print(f'✅ JSON 有效：{len(data)} 条')
+"
+```
+
+**如 JSON 解析失败**：
+1. 检查是否有 ASCII `"` (U+0022) 出现在中文文本中冒充引号（如 `"铭旌"`）
+2. 若有，用 python 自动替换为中文弯引号 `“` / `”`
+3. 若自动修复仍失败 → 重新运行校对 Agent
+
+**如条目数与批次条目数不一致** → 重新运行校对 Agent。
+
+确认无误后才进入 Step 5 提交。
+
 ### Step 5: 提交并推进
 
 ```bash
@@ -221,3 +301,14 @@ submit 内部自动执行 write + TM 积累 + 重新 parse + 生成下一批 JSO
 - 所有中间文件按源文件保留在 `batch_translate/exports/<stem>/`
 - 源文件不受影响，init 会复制到 `batch_translate/data/<stem>/_working_*`
 - 支持格式：mqxliff / docx / xlsx / xlsm / txt / csv / tsv
+
+## Shell 命令规范
+
+- **多行 Python**：使用 heredoc 语法 `python << 'PYEOF' ... PYEOF`（单引号阻止 shell 变量展开）
+- **含中文输出时**：将 stdout 重定向到文件后用 Read 读取，避免 GBK/终端编码错误
+  ```bash
+  python -c "..." > output.txt 2>&1
+  ```
+- **路径含特殊字符**（空格、单引号等）：优先用 python `os.path.join()` 拼接路径，而非 bash 字符串拼接
+- **检查文件存在**：优先用 Glob 工具，而非 `ls path/with/special'chars`
+- **pip**：用 `python -m pip install` 而非 `pip install`，避免 PATH 问题
