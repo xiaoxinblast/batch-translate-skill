@@ -231,6 +231,12 @@ python batch_translate/batch.py next
 
 > 读取 `_batch_NNN_to_translate.json`，按其中的 instructions、style_guide 和 document_summary 翻译所有 entries 的 source 字段。
 > 
+> **翻译要求**：
+> - 以 style_guide 的风格要求为最高准则，产出自然地道的中文
+> - 避免翻译腔和日式语序，译文读起来应像中文原生写作
+> - 用词精当，句式流畅，不同角色/文本类型应有明确的语气区分
+> - **输出前自检**：译文的每个句子，念出来是否像地道的中文？
+> 
 > **利用内嵌数据**：每条 entry 可能带有：
 > - `tm_matches`：翻译记忆模糊匹配（含 similarity 分数、已有译文），高相似度（≥0.85）可直接复用或微调
 > - `terms`：术语库匹配结果，确保术语译法与术语库一致
@@ -258,8 +264,18 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 用 `Agent` 工具派校对任务。**必须指定 `model: "opus"` 并启用 max 思考强度**。prompt：
 
-> 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source：
-> 1) 术语 2) 标点 3) 语气 4) 自然流畅。
+> 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source，完成两阶段工作：
+> 
+> **阶段一：硬性错误检查**
+> 1) 术语一致性 2) 标点格式 3) 标签完整性 4) 引号规范 5) 漏译/多译。
+> 
+> **阶段二：语言润色（同等重要）**
+> 逐条审视译文是否符合以下标准，不符合的主动润色：
+> - 是否符合古风/武侠小说语感（参考 style_guide）
+> - 是否自然地道的中文表达，有无翻译腔/日式语序
+> - 用词是否精当，能否替换为更贴切、更有表现力的中文词汇
+> - 句式是否流畅，长句是否需要断句，短句是否需要合并
+> - 角色语气是否分明（文官雅致、武将豪迈、村民质朴……）
 > 
 > **利用内嵌数据**：每条 entry 可能带有 `tm_matches`（翻译记忆参考）和 `terms`（术语约束），核对时参考。
 > 
@@ -269,8 +285,8 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 
 > 发现问题直接修正，不要标注。
 > 修正完成后，用 Write 工具将完整的 JSON 数组写入 `_batch_NNN_reviewed.json`。
-> 格式：`[{"id": "1", "target": "修正后译文"}, ...]`。
-> 必须在回复中说明一共修正了几处、分别是什么问题，但修正后的完整 JSON 必须已写入文件。
+> 格式：`[{"id": "1", "target": "润色后译文"}, ...]`。
+> 必须在回复中说明一共修正了几处、分别是什么类型（硬性错误/润色），修正后的完整 JSON 必须已写入文件。
 
 Agent 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
 
