@@ -109,21 +109,17 @@ ls -la
 
 用户确认后，进入阶段〇.七。
 
-## 阶段〇.七：子 task 模型确认
+## 阶段〇.七：子 task 模型分配
 
-> ⚠️ **背景**：翻译/校对由子 task 完成，模型质量直接影响译文质量。低质量模型会导致译文质量明显偏低。
+> 翻译/校对由子 task 完成。本 skill 固定使用以下模型分配：
 
-### 1. 询问用户子 task 模型
+| 任务类型 | 模型 | 说明 |
+|---------|------|------|
+| 语境分析（阶段一 Step 5） | `deepseek-flash` | 快速扫描，不涉及译文质量 |
+| 翻译（阶段二 Step 2） | `deepseek-pro` | 核心翻译任务，需高质量 |
+| 校对（阶段二 Step 4） | `deepseek-pro` | 质量把关，需高质量 |
 
-用 `ask` 工具询问用户：**翻译/校对子 task 使用哪个模型？**
-
-列出可用选项（从上下文或历史对话中获取已知模型名）。若无法获取模型列表，使用 open-ended 方式让用户输入模型名称。
-
-### 2. 记录模型名称
-
-将用户选择的模型名称记录为 `<subagent_model>`，在阶段二的 Step 2（翻译）和 Step 4（校对）中作为 `task` 的 `model` 参数使用。
-
-> **注意**：若用户在后续对话中更换了模型，需重新确认 `<subagent_model>`。
+> **注意**：如需更换模型，直接修改上述分配表后继续。
 
 ## 阶段一：项目初始化
 
@@ -208,7 +204,7 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 
 > ⚠️ **强制步骤**：init 后必须立即执行，不可跳过。
 
-**必须**用 `task` 工具派分析任务。prompt：
+**必须**用 `task` 工具派分析任务，指定 `model: "deepseek-flash"`。prompt：
 
 > 读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。输出纯文本分析报告，必须覆盖：
 > - **文档类型与用途**：这是什么文档，给谁看的，整体语气风格
@@ -299,7 +295,7 @@ python batch_translate/batch.py next
 
 ### Step 2: 翻译
 
-用 `task` 工具派翻译任务。指定 `model` 为阶段〇.七确认的 `<subagent_model>`，`effort: "max"`。prompt：
+用 `task` 工具派翻译任务。指定 `model: "deepseek-pro"`，`effort: "max"`。prompt：
 
 > 读取 `_batch_NNN_to_translate.json`，按其中的 instructions、style_guide 和 document_summary 翻译所有 entries 的 source 字段。
 > 
@@ -354,7 +350,7 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 ### Step 4: 校对
 
-用 `task` 工具派校对任务。指定 `model` 为阶段〇.七确认的 `<subagent_model>`，`effort: "max"`。prompt：
+用 `task` 工具派校对任务。指定 `model: "deepseek-pro"`，`effort: "max"`。prompt：
 
 > 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source，完成两阶段工作：
 > 
