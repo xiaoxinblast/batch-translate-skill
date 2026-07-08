@@ -109,7 +109,76 @@ ls -la
 > ⚠️ **重要警告**：若用户选择"从源文件导入已有译文"，必须提醒：
 > "源文件中已有的译文可能已过时——客户端可能修改了日语源文但未同步更新中文译文（如 flavor text 的 revise）。导入后需逐条核对。"
 
-用户确认后，进入阶段一。
+用户确认后，进入阶段〇.七。
+
+## 阶段〇.七：子 Agent 模型确认（可能需要重启）
+
+> ⚠️ **背景**：翻译/校对由子 Agent 完成，其模型由 CC 配置的 `CLAUDE_CODE_SUBAGENT_MODEL` 等字段决定。若子 Agent 跑在低质量模型（如 flash），前几批译文质量明显偏低（实测校对修正数从个位数降到 0-2）。
+>
+> ⚠️ **关键约束（已实证）**：`settings.json` 的子 Agent 模型改动**不能热生效，必须重启 Claude Code 会话**。因此本阶段若发生切换，会中断流程、要求重启；重启后重新触发本 skill（说"继续翻译"）即可继续，检测步骤会识别已是目标模型而自动跳过本阶段。
+
+以下操作默认针对全局配置 `~/.claude/settings.json`；若你的子 Agent 模型配置在项目级 `.claude/settings.json`，请改对应文件。
+
+### 1. 检测当前子 Agent 模型
+
+```bash
+python << 'PYEOF' > batch_translate/exports/model_probe.txt 2>&1
+import json, os
+p = os.path.expanduser("~/.claude/settings.json")
+s = json.load(open(p, encoding="utf-8")) if os.path.isfile(p) else {}
+env = s.get("env", {})
+print("CLAUDE_CODE_SUBAGENT_MODEL   =", env.get("CLAUDE_CODE_SUBAGENT_MODEL"))
+print("ANTHROPIC_DEFAULT_HAIKU_MODEL =", env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
+print("haikuModel =", s.get("haikuModel"))
+print("testModel  =", s.get("testModel"))
+PYEOF
+```
+
+用 Read 读取 `model_probe.txt`。若这 4 个字段已是高质量模型（pro）→ **跳过本阶段**，直接进入阶段一。
+
+### 2. 询问用户是否切换
+
+若当前为低质量模型（flash 等），用 `AskUserQuestion` 告知当前模型，询问：**是否切换到高质量模型（pro）再开始翻译？**
+- 切换到 pro（译文质量更高，但需重启会话）(Recommended)
+- 沿用当前模型继续（不改配置、不重启）
+
+用户选"沿用当前模型" → 不改动，直接进入阶段一。
+
+### 3. 切换（用户同意后）
+
+把当前 4 字段值**备份**到共享路径 `batch_translate/data/.model_backup`（不依赖 stem，恢复时统一读取），再改为 pro。把 `PRO` 替换为高质量模型 ID（与主会话一致）：
+
+```bash
+python << 'PYEOF' > batch_translate/exports/model_switch.txt 2>&1
+import json, os
+sp = os.path.expanduser("~/.claude/settings.json")
+s = json.load(open(sp, encoding="utf-8"))
+env = s.setdefault("env", {})
+backup = {
+    "CLAUDE_CODE_SUBAGENT_MODEL": env.get("CLAUDE_CODE_SUBAGENT_MODEL"),
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL"),
+    "haikuModel": s.get("haikuModel"),
+    "testModel": s.get("testModel"),
+}
+os.makedirs("batch_translate/data", exist_ok=True)
+json.dump(backup, open("batch_translate/data/.model_backup", "w", encoding="utf-8"),
+          ensure_ascii=False, indent=2)
+
+PRO = "<pro-model-id>"  # ← 替换为高质量模型 ID
+env["CLAUDE_CODE_SUBAGENT_MODEL"] = PRO
+env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = PRO
+s["haikuModel"] = PRO
+s["testModel"] = PRO
+json.dump(s, open(sp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+print("✅ 已切换 4 字段到", PRO, "，原值备份到 data/.model_backup")
+PYEOF
+```
+
+用 Read 确认输出 `✅` 后，**提示用户重启 Claude Code 会话**，并说明：重启后重新触发本 skill（"继续翻译"）即可继续，本阶段会自动跳过。**在用户重启前不要继续后续步骤。**
+
+### 4. 恢复
+
+全部批次完成后自动执行，见阶段二末尾"完成"。
 
 ## 阶段一：项目初始化
 
@@ -201,8 +270,9 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 > - **内容分段**：文档由哪些主要部分组成，每部分对应的 id 范围
 > - **跨区域关联**：相距较远但内容关联的条目（如前面标题与后面详述），明确指出 id 对应关系
 > - **翻译注意事项**：哪些条目无需翻译（URL/占位符/版权等），哪些需特殊处理（标签密集/敬称/重复内容等）
+> - **疑似术语库未覆盖的专名**（报告最后单独一节）：通读全文，找出**反复出现**的角色名、地名、组织名或专有概念，且各 entry 的 `terms` 字段显示术语库**可能未收录**的。只报高频/关键的（反复出现、影响多条译文），忽略一次性路人名，清单控制在合理数量以免刷屏。每行一条，格式 `原文 | 建议译名 | 出现频次或首次出现的 id`；若无缺口写"无"。
 > 
-> 注意：术语统一由术语库（term_base.xlsx）管理，语境分析不需要列出术语。
+> 说明：常规术语的译法统一由术语库（term_base.xlsx）自动管理，语境分析**不需要**罗列已收录术语；本节只报**疑似缺口**，供主流程提交用户定名。
 
 Agent 返回报告后，**必须**将内容写入 `batch_state.json` 的 `document_summary` 字段。方法：
 
@@ -212,6 +282,53 @@ state = json.load(open('batch_translate/data/<stem>/batch_state.json'))
 state['document_summary'] += "\n\n" + agent_report  # agent_report 是 Agent 返回的文本
 json.dump(state, open('batch_translate/data/<stem>/batch_state.json', 'w'), ensure_ascii=False, indent=2)
 ```
+
+### 6. 术语缺口确认
+
+> ⚠️ **强制步骤**：语境分析报告若含「疑似术语库未覆盖的专名」清单（内容非"无"），必须在开译前处理。否则这些专名会被翻译 Agent 就近臆测（如 ナナキ 曾被误译为"赤红XIII"），且校对 Agent 只对"是否符合术语库"负责、术语库缺失时无法纠正。
+
+1. 从步骤 5 的报告中提取「疑似术语库未覆盖的专名」清单。若为"无"，跳过本步骤直接进入阶段二。
+2. 用 `AskUserQuestion` 把清单呈现给用户，请其对每个专名**定名**。每项列出：原文、Agent 建议译名、出现频次/上下文；选项给"采纳建议译名 / 自定义（Other）/ 跳过（暂不入库）"。专名较多时分组多次询问。
+3. 用户定名后，把确认的 `原文 | 译名 | 注释` 追加写入术语库（去重，跳过已存在的原文）——把 `new_terms` 填成用户的定名结果：
+
+```bash
+python << 'PYEOF'
+import openpyxl
+# new_terms：填入用户定名结果，格式 [(ja, zh, note), ...]
+new_terms = [
+    # ("ナナキ", "纳纳基", "角色名"),
+]
+p = "batch_translate/data/term_base.xlsx"
+wb = openpyxl.load_workbook(p)
+ws = wb.active
+existing = {str(r[0].value).strip() for r in ws.iter_rows(min_row=2) if r[0].value}
+added = 0
+for ja, zh, note in new_terms:
+    if ja.strip() in existing:
+        continue
+    ws.append([ja, zh, note])
+    added += 1
+wb.save(p)
+print(f"已新增 {added} 条术语（跳过 {len(new_terms) - added} 条已存在）")
+PYEOF
+```
+
+4. 写入术语库后**必须重新注入术语**到待翻译 JSON（否则新术语不会出现在各批的 `terms` 字段中）。复用 batch.py 现有的 enrichment（不重跑 init、不影响进度）；把 `STEM` 替换为实际 stem：
+
+```bash
+python << 'PYEOF' > batch_translate/exports/enrich_out.txt 2>&1
+import sys, json
+from pathlib import Path
+sys.path.insert(0, "batch_translate")
+import batch
+STEM = "<stem>"  # ← 替换为实际 stem
+state = json.load(open(f"batch_translate/data/{STEM}/batch_state.json", encoding="utf-8"))
+batch._enrich_working_json(Path(state["export_file"]), state)
+print("✅ 新术语已重新注入 _working.json")
+PYEOF
+```
+
+用 Read 读取 `enrich_out.txt` 确认输出 `✅` 后，进入阶段二。
 
 ## 校对模式（已有译文）
 
@@ -270,7 +387,15 @@ python batch_translate/batch.py next
 > 
 > 遇到不确定的术语或上下文时，主动搜索项目文件或联网验证。
 > 翻译完成后，用 Write 工具将结果写入 `_batch_NNN_translated.json`。
-> 格式：`[{"id": "1", "target": "译文"}, ...]`，仅输出 JSON。
+>
+> **输出契约（硬性，违反则整批作废重来）**：
+> - 输出**必须是扁平 JSON 数组** `[{"id": "1", "target": "译文"}, ...]`，**禁止**包装成 `{"entries": [...]}` 或任何其他对象。
+> - **必须包含本批全部 N 条**（N = 任务 JSON 里 entries 的条数），一条都不能少。
+> - 每条 `id` 为**字符串**，与 source 的 id 完全一致，不得改写、合并或新增。
+> - 每条 target 的内联标签 `<tag .../>` 数量与该条 source 完全一致。
+> - 中文引号只能用弯引号 `""`（U+201C/U+201D），**禁止**用 ASCII 直引号 `""`（U+0022）冒充，否则会破坏 JSON。
+> - 仅输出 JSON，不要附加任何解释性文字。
+> - 回复中报告：总条数（应 = N）。
 
 Agent 返回后，**必须确认**文件存在，否则重试。
 
@@ -324,32 +449,81 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 
 > 发现问题直接修正，不要标注。
 > 修正完成后，用 Write 工具将完整的 JSON 数组写入 `_batch_NNN_reviewed.json`。
-> 格式：`[{"id": "1", "target": "润色后译文"}, ...]`。
-> 必须在回复中说明一共修正了几处、分别是什么类型（硬性错误/润色），修正后的完整 JSON 必须已写入文件。
+>
+> **输出契约（硬性，违反则退回重跑）**：
+> - 输出**必须是扁平 JSON 数组** `[{"id": "1", "target": "润色后译文"}, ...]`，**禁止**包装成 `{"entries": [...]}` 或任何其他对象。
+> - **必须包含本批全部 N 条**（N = 待校对 entries 的条数），**不得只输出有改动的条目**——未改动的条目也要把原译文原样放进数组。这是最容易犯、后果最严重的错误：漏掉的条目会导致其译文被静默清空。
+> - 每条 `id` 为**字符串**，与 source 一致；target 的内联标签 `<tag .../>` 数量与该条 source 完全一致。
+> - 中文引号只能用弯引号 `""`（U+201C/U+201D），**禁止** ASCII 直引号 `""`（U+0022）冒充，否则会破坏 JSON。
+> - 回复中必须报告：**总条数（应 = N）**、修正条数、修正类型分类（硬性错误 / 润色）。
 
 Agent 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
 
-### Step 4.5: 验证校对 JSON
+### Step 4.5: 机制化验证校对 JSON
 
-> ⚠️ 校对 Agent 返回后、提交前，**必须**验证 JSON 有效性。
+> ⚠️ 校对 Agent 返回后、提交前，**必须**跑以下验证。它复用 P0 同款逻辑（读 `batch_state.json` 取本批预期 id 与 source），是提交前的流程层前置拦截，与 `submit` 内的工具层兜底构成双保险。**只读、不改文件**。
+
+把 `STEM` 替换为实际源文件 stem 后运行（批号自动从 state 读取，无需手填）：
 
 ```bash
-python -c "
-import json
-with open('batch_translate/exports/<stem>/_batch_NNN_reviewed.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-print(f'✅ JSON 有效：{len(data)} 条')
-"
+python << 'PYEOF' > batch_translate/exports/verify_out.txt 2>&1
+import json, re
+from pathlib import Path
+
+STEM = "<stem>"  # ← 替换为实际源文件 stem
+base = Path("batch_translate")
+state = json.load(open(base / "data" / STEM / "batch_state.json", encoding="utf-8"))
+export_data = json.load(open(state["export_file"], encoding="utf-8"))
+bi = state["current_batch"]
+start, end = state["batches"][bi]
+batch_entries = export_data["entries"][start:end]
+expected = [str(e["id"]) for e in batch_entries]
+src_by_id = {str(e["id"]): e.get("source", "") for e in batch_entries}
+
+reviewed = base / "exports" / STEM / f"_batch_{bi + 1:03d}_reviewed.json"
+data = json.load(open(reviewed, encoding="utf-8"))
+
+# 容错：自动解包 {"entries":[...]}
+if isinstance(data, dict) and "entries" in data:
+    print("⚠️ 检测到包装对象 {entries:[...]}，已自动解包（Agent 应输出扁平数组）")
+    data = data["entries"]
+if not isinstance(data, list):
+    print("❌ 不是 JSON 数组 → 退回 Step 4 重跑校对")
+    raise SystemExit(1)
+
+sub = [str(r.get("id")) for r in data]
+sub_set, exp_set = set(sub), set(expected)
+missing = exp_set - sub_set
+extra = sub_set - exp_set
+
+# 致命：条数不符 / id 未全覆盖 → 阻止提交
+if len(data) != len(expected) or missing:
+    print(f"❌ 条数不符：预期 {len(expected)} 条，实际 {len(data)} 条")
+    if missing:
+        print(f"   缺失 id（前 20）：{sorted(missing)[:20]}")
+    print("   → 校对 Agent 可能只输出了改动条。退回 Step 4，明确要求'输出本批全部条目'后重跑。")
+    raise SystemExit(1)
+
+# 警告：标签数不一致 / 多余 id → 列出但不阻止（与 P0 分级一致）
+TAG = re.compile(r"<tag\s+id=['\"][^'\"]+['\"].*?/>")
+tag_bad = [str(r["id"]) for r in data
+           if "<tag" in src_by_id.get(str(r["id"]), "")
+           and len(TAG.findall(src_by_id.get(str(r["id"]), ""))) != len(TAG.findall(r.get("target") or ""))]
+if tag_bad:
+    print(f"⚠️ {len(tag_bad)} 条标签数与 source 不一致：{tag_bad[:20]}（建议退回 Step 4 修正后再 submit）")
+if extra:
+    print(f"⚠️ {len(extra)} 条 id 不属于本批：{sorted(extra)[:20]}")
+
+print(f"✅ 校验通过：{len(data)} 条，本批 id 全覆盖" + ("（有警告见上）" if (tag_bad or extra) else ""))
+PYEOF
 ```
 
-**如 JSON 解析失败**：
-1. 检查是否有 ASCII `"` (U+0022) 出现在中文文本中冒充引号（如 `"铭旌"`）
-2. 若有，用 python 自动替换为中文弯引号 `“` / `”`
-3. 若自动修复仍失败 → 重新运行校对 Agent
+用 Read 读取 `batch_translate/exports/verify_out.txt` 查看结果（避免终端 GBK 编码错误）。
 
-**如条目数与批次条目数不一致** → 重新运行校对 Agent。
-
-确认无误后才进入 Step 5 提交。
+**分级处理**：
+- 打印 `✅ 校验通过` → 进入 Step 5 提交。
+- 打印 `❌ 条数不符 / 不是 JSON 数组`（脚本 exit 1）→ **退回 Step 4 重跑校对**，prompt 中明确强调"必须输出本批全部 N 条，不得只输出改动条"。
+- 仅有 `⚠️ 标签数不一致` → 退回 Step 4 修正对应条目的标签后重跑；确认无误再进 Step 5。
 
 ### Step 5: 提交并推进
 
@@ -362,6 +536,39 @@ submit 内部自动执行 write + TM 积累 + 重新 parse + 生成下一批 JSO
 ### 完成
 
 全部批次完成后，`batch.py submit` 自动清理状态文件。告知用户完成，输出文件位置。
+
+**恢复子 Agent 模型**：若阶段〇.七曾切换过模型（存在 `batch_translate/data/.model_backup`），从备份读回原值写回 `~/.claude/settings.json`，删除备份，并提示"模型配置已恢复，下次启动生效"：
+
+```bash
+python << 'PYEOF' > batch_translate/exports/model_restore.txt 2>&1
+import json, os
+bk = "batch_translate/data/.model_backup"
+if not os.path.isfile(bk):
+    print("无备份，跳过恢复")
+else:
+    backup = json.load(open(bk, encoding="utf-8"))
+    sp = os.path.expanduser("~/.claude/settings.json")
+    s = json.load(open(sp, encoding="utf-8"))
+    env = s.setdefault("env", {})
+    for k in ("CLAUDE_CODE_SUBAGENT_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"):
+        v = backup.get(k)
+        if v is None:
+            env.pop(k, None)      # 原本不存在 → 删除，而非写 null
+        else:
+            env[k] = v
+    for k in ("haikuModel", "testModel"):
+        v = backup.get(k)
+        if v is None:
+            s.pop(k, None)
+        else:
+            s[k] = v
+    json.dump(s, open(sp, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    os.remove(bk)
+    print("✅ 已恢复模型配置并删除备份，下次启动生效")
+PYEOF
+```
+
+提示用户：模型配置已恢复，**下次启动 Claude Code 时生效**。
 
 ## 错误处理
 
