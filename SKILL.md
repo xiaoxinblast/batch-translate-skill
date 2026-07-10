@@ -299,6 +299,8 @@ python batch_translate/batch.py next
 
 > 读取 `_batch_NNN_to_translate.json`，按其中的 instructions、style_guide 和 document_summary 翻译所有 entries 的 source 字段。
 > 
+> **每条 entry 的 `note` 字段包含字幕種別、FIX 标记、场景说明等重要上下文，翻译前必须阅读。**
+> 
 > **翻译要求**：
 > - 以 style_guide 的风格要求为最高准则，产出自然地道的中文
 > - 避免翻译腔和日式语序，译文读起来应像中文原生写作
@@ -318,6 +320,7 @@ python batch_translate/batch.py next
 >   ⑤ 面向玩家的祈使/指示句不受以上限制，保留原语气
 > 
 > **利用内嵌数据**：每条 entry 可能带有：
+> - `note`：**必须最优先阅读** — 包含字幕種別（アドリブ/普通台词等）、FIX 标记、场景说明、UI 限制等关键上下文
 > - `tm_matches`：翻译记忆模糊匹配（含 similarity 分数、已有译文），高相似度（≥0.85）可直接复用或微调
 > - `terms`：术语库匹配结果，确保术语译法与术语库一致
 > - `context`：场景标识，同一角色/场景的用语应保持一致
@@ -355,7 +358,7 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 读取 `_batch_NNN_to_review.json`，逐条核对 translated 与 source，完成两阶段工作：
 > 
 > **阶段一：硬性错误检查**
-> 1) 术语一致性 2) 标点格式 3) 标签完整性 4) 引号规范 5) 漏译/多译 6) 说明文体裁完整性。
+> 1) 术语一致性 2) 标点格式 3) 标签完整性 4) 引号规范 5) 漏译/多译 6) 说明文体裁完整性 7) **note 注释是否已正确解读（字幕種別判断错误为严重问题）**。
 > 
 > **说明文体裁硬性检查**（图鉴、道具描述、角色介绍等"定义句+动作罗列"结构必须逐条执行）：
 > 1. **定义句后缺主语**：定义句之后的分句，是否补出了主语？若直接以动词/介词开头则为错误。**同时检查：人类/人形敌人是否误用了"它"（应为"他/她"或"该××"）**
@@ -382,7 +385,7 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 8. **指示词泛滥**：满篇"这个""那个"是否已替换为具体名词？
 > 9. **敬语落差**：说话人的身份高低在措辞上是否体现？
 > 
-> **利用内嵌数据**：每条 entry 可能带有 `tm_matches`（翻译记忆参考）和 `terms`（术语约束），核对时参考。
+> **利用内嵌数据**：每条 entry 可能带有 `note`（上下文注释，翻译前必须阅读）、`tm_matches`（翻译记忆参考）和 `terms`（术语约束），核对时参考。
 > 
 > **标签保护**：内联标签（`<tag .../>`）必须原样保留，数量与位置与 source 一致。丢失标签是最严重的错误。
 > 
