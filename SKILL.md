@@ -327,6 +327,7 @@ python batch_translate/batch.py next
 >   - 目标译文中术语与 `terms` 冲突时，以 `terms` 为准
 >   - 同 source 有多条匹配时，优先选 similarity 最高且 context 吻合的
 >   - TM 的 context 仅供参考，以当前条目的 note/context 为准
+>   - **长句部分匹配**：整体 similarity 偏低但前/后半高度一致时，一致部分的译法应与 TM 保持统一
 > - `terms`：术语库匹配结果，确保术语译法与术语库一致
 > - `context`：场景标识，同一角色/场景的用语应保持一致
 > 
@@ -392,7 +393,7 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 > 
 > **利用内嵌数据**：
 > - `note`：上下文注释，翻译前必须阅读
-> - `tm_matches`：检查复用的 TM 译文是否适合当前上下文；术语是否与 `terms` 一致；中低相似度的复用是否遗漏了差异部分
+> - `tm_matches`：检查复用的 TM 译文是否适合当前上下文；术语是否与 `terms` 一致；中低相似度的复用是否遗漏了差异部分；**长句中与 TM 高度一致的部分是否保持了统一译法**
 > - `terms`：术语约束，核对时参考
 > 
 > **标签保护**：内联标签（`<tag .../>`）必须原样保留，数量与位置与 source 一致。丢失标签是最严重的错误。
