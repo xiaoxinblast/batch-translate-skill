@@ -60,7 +60,7 @@ effort: max
 
 - `note`：根据注释内容判断译文处理是否正确
 - `tm_matches`：检查复用的 TM 译文是否适合当前上下文；术语是否与 `terms` 一致；中低相似度的复用是否遗漏了差异部分；**长句中与 TM 基本一致的部分是否保持了统一译法**
-- `tm_fragments`：检查片段匹配的译法是否被正确参考（对应部分译法一致即可，不应照搬整个 match_target）
+- `tm_fragments`：检查片段匹配的译法是否被正确参考。`fragment_target_confidence` 为 high 时可直接复用，medium/full_sentence 时以完整 `match_target` 语义为准
 - `terms`：术语约束，核对时参考
 - **`previous`**：上一批末尾译文。检查当前批与上文在术语、句式、语气、角色称呼上是否一致
 
