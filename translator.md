@@ -63,6 +63,7 @@ effort: max
   - 同 source 有多条匹配时，优先选 similarity 最高且 context 吻合的
   - TM 的 context 仅供参考，以当前条目的 note/context 为准
   - **句段内部分一致**：整体相似度虽低，但句段中与 TM 基本一致的部分，其译法应与 TM 保持统一
+- `tm_fragments`：n-gram 索引驱动的片段匹配，`fragment_source` 是匹配到的日文片段，`match_target` 是含该片段的完整 TM 译文。**参考 match_target 中对应部分的译法，不要照搬整个 match_target**
 - `terms`：术语库匹配结果，确保术语译法与术语库一致
 - `context`：场景标识，同一角色/场景的用语应保持一致
 - **`previous`**：上一批末尾已翻译的条目（id + source + target），**仅供一致性参考，不得重新翻译**。当前条目与 `previous` 中同类句式、相同角色/场景的表达应保持一致
