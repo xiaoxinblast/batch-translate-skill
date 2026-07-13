@@ -286,12 +286,11 @@ python batch_translate/batch.py next
 
 ### Step 2: 翻译
 
-调用 `/translator`，arguments 为：
+用 `run_skill` 调用 translator subagent：
+- name: "translator"
+- arguments: "读取 `_batch_NNN_to_translate.json`，翻译所有 entries 的 source 字段，按输出契约将结果写入 `_batch_NNN_translated.json`"
 
-> 读取 `_batch_NNN_to_translate.json`，翻译所有 entries 的 source 字段，按输出契约将结果写入 `_batch_NNN_translated.json`。
-
-
-task 返回后，**必须确认**文件存在，否则重试。
+subagent 返回后，**必须确认**文件存在，否则重试。
 
 ### Step 3: 生成校对文件
 
@@ -303,12 +302,11 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 ### Step 4: 校对
 
-调用 `/trans-reviewer`，arguments 为：
+用 `run_skill` 调用 trans-reviewer subagent：
+- name: "trans-reviewer"
+- arguments: "读取 `_batch_NNN_to_review.json`，逐条校对所有 entries，按输出契约将结果写入 `_batch_NNN_reviewed.json`"
 
-> 读取 `_batch_NNN_to_review.json`，逐条校对所有 entries，按输出契约将结果写入 `_batch_NNN_reviewed.json`。
-
-
-task 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
+subagent 返回后，**必须确认** `_batch_NNN_reviewed.json` 文件存在且包含全部条目，否则重试。
 
 ### Step 4.5: 机制化验证校对 JSON
 
