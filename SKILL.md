@@ -219,12 +219,11 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 
 > ⚠️ **强制步骤**：init 后必须立即执行，不可跳过。
 
-**必须**调用 `/context-analyzer`，arguments 为：
+用 `run_skill` 调用 context-analyzer subagent：
+- name: "context-analyzer"
+- arguments: "读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。报告须包含：1. 文档概览（条目数、内容类别、文本类型分布）2. 每条 entry 的语境描述（说话人、场景、功能标签）3. 关键术语清单（出现在源文中的专有名词、角色名、地名、系统词）4. 疑似术语库未覆盖的专名清单（与术语库比对，未覆盖的列出并给出建议译名）5. 格式标签使用情况（<actor>、<i>、<button>、颜色宏等）6. アドリブ/普通台词/含<i>宏台词的分类统计 7. 翻译风险提示（如歧义文本、字数限制、需要上下文确认的条目）"
 
-> 读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。
->
-
-task 返回报告后，**必须**将内容写入 `batch_state.json` 的 `document_summary` 字段。方法：
+subagent 返回后，**必须确认**报告内容完整，然后将报告写入 `batch_state.json` 的 `document_summary` 字段。方法：
 
 ```python
 import json
