@@ -221,7 +221,7 @@ xlsx 格式需额外指定 `--source-col A --target-col B`。
 
 用 `run_skill` 调用 context-analyzer subagent：
 - name: "context-analyzer"
-- arguments: "读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。报告须包含：1. 文档概览（条目数、内容类别、文本类型分布）2. 每条 entry 的语境描述（说话人、场景、功能标签）——必须读取 note 字段中的字幕種別注释 3. 关键术语清单（出现在源文中的专有名词、角色名、地名、系统词）4. 疑似术语库未覆盖的专名清单 5. 格式标签使用情况（<actor>、<i>、<button>、颜色宏等）6. 字幕種別分类统计：アドリブ（字幕ナシ/環境音）→不译仅保留标签；EV字幕→正常翻译但句末不加逗号句号；通常→正常翻译。**注意 EV字幕 ≠ アドリブ** 7. 翻译风险提示"
+- arguments: "读取 `batch_translate/exports/<stem>/_working.json`，做全量语境分析。同时读取 batch_translate/data/style_guide.txt 中关于字幕種別分类和翻译处理的规则。报告须包含：1. 文档概览（条目数、内容类别、文本类型分布）2. 每条 entry 的语境描述（说话人、场景、功能标签）——须读取 note 字段 3. 关键术语清单 4. 疑似术语库未覆盖的专名清单 5. 格式标签使用情况 6. 字幕種別分类统计（按风格指南规则分类）7. 翻译风险提示"
 
 subagent 返回后，**必须确认**报告内容完整，然后将报告写入 `batch_state.json` 的 `document_summary` 字段。方法：
 
