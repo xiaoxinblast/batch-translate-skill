@@ -165,6 +165,8 @@ python batch_translate/batch.py review _batch_NNN_translated.json
 
 用 `run_skill` 调用 trans-reviewer subagent。arguments 中必须使用**绝对路径**。
 
+> locked=true 的条目**严禁修改**——校对时同样遵循此规则。
+
 ### Step 4.5: 机制化验证校对 JSON
 
 ```bash
