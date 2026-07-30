@@ -1,6 +1,6 @@
 ---
 name: batch-translate
-description: 批量翻译工作流。支持 mqxliff/docx/xlsx/txt → 分批翻译 → 逐批校对 → 写回，全自动循环。v4: 混合文件原生支持 + 独立验证脚本 + 绝对路径 + UTF-8规范
+description: "批量翻译工作流。支持 mqxliff/docx/xlsx/txt → 分批翻译 → 逐批校对 → 写回，全自动循环。v4: 混合文件原生支持 + 独立验证脚本 + 绝对路径 + UTF-8规范"
 ---
 
 # batch-translate — 批量翻译工作流
